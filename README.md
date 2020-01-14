@@ -4,4 +4,4 @@
 
 # Tested on OpenWRT:
 
-Ubuntu's ssh-copy-id - **OK**
+Ubuntu's ssh-copy-id -> **OK**
