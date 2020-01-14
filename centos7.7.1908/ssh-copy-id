@@ -44,16 +44,20 @@ then
   else
     cat <<-EOF
         oh dear.
+
           If you have a more recent shell available, that supports \$(...) etc.
           please try setting the environment variable SANE_SH to the path of that
           shell, and then retry running this script. If that works, please report
           a bug describing your setup, and the shell you used to make it work.
+
         EOF
     printf "%s: ERROR: Less dimwitted shell required.\n" "$0"
     exit 1
   fi
 fi
+
 DEFAULT_PUB_ID_FILE="$HOME/$(cd "$HOME" ; ls -t .ssh/id*.pub 2>/dev/null | grep -v -- '-cert.pub$' | head -n 1)"
+
 usage () {
   printf 'Usage: %s [-h|-?|-f|-n] [-i [identity_file]] [-p port] [[-o <ssh -o options>] ...] [user@]hostname\n' "$0" >&2
   printf '\t-f: force mode -- copy keys without trying to check if they are already installed\n' >&2
@@ -61,18 +65,23 @@ usage () {
   printf '\t-h|-?: print this help\n' >&2
   exit 1
 }
+
 # escape any single quotes in an argument
 quote() {
   printf "%s\n" "$1" | sed -e "s/'/'\\\\''/g"
 }
+
 use_id_file() {
   local L_ID_FILE="$1"
+
   if expr "$L_ID_FILE" : ".*\.pub$" >/dev/null ; then
     PUB_ID_FILE="$L_ID_FILE"
   else
     PUB_ID_FILE="$L_ID_FILE.pub"
   fi
+
   [ "$FORCED" ] || PRIV_ID_FILE=$(dirname "$PUB_ID_FILE")/$(basename "$PUB_ID_FILE" .pub)
+
   # check that the files are readable
   for f in "$PUB_ID_FILE" ${PRIV_ID_FILE:+"$PRIV_ID_FILE"} ; do
     ErrMSG=$( { : < "$f" ; } 2>&1 ) || {
@@ -85,17 +94,21 @@ use_id_file() {
   printf '%s: INFO: Source of key(s) to be installed: "%s"\n' "$0" "$PUB_ID_FILE" >&2
   GET_ID="cat \"$PUB_ID_FILE\""
 }
+
 if [ -n "$SSH_AUTH_SOCK" ] && ssh-add -L >/dev/null 2>&1 ; then
   GET_ID="ssh-add -L"
 fi
+
 # legacy environment variable implies forced copy
 [ "x$SSH_COPY_ID_LEGACY" != "x" ] && FORCED=1
+
 while test "$#" -gt 0
 do
   [ "${SEEN_OPT_I}" ] && expr "$1" : "[-]i" >/dev/null && {
         printf "\n%s: ERROR: -i option must not be specified more than once\n\n" "$0"
         usage
   }
+
   OPT= OPTARG=
   # implement something like getopt to avoid Solaris pain
   case "$1" in
@@ -141,6 +154,7 @@ do
       continue
       ;;
   esac
+
   case "$OPT" in
     -i)
       SEEN_OPT_I="yes"
@@ -160,7 +174,9 @@ do
       ;;
   esac
 done 
+
 eval set -- "$SAVEARGS"
+
 if [ $# = 0 ] ; then
   usage
 fi
@@ -168,29 +184,36 @@ if [ $# != 1 ] ; then
   printf '%s: ERROR: Too many arguments.  Expecting a target hostname, got: %s\n\n' "$0" "$SAVEARGS" >&2
   usage
 fi
+
 # drop trailing colon
 USER_HOST=$(printf "%s\n" "$1" | sed 's/:$//')
 # tack the hostname onto SSH_OPTS
 SSH_OPTS="${SSH_OPTS:+$SSH_OPTS }'$(quote "$USER_HOST")'"
 # and populate "$@" for later use (only way to get proper quoting of options)
 eval set -- "$SSH_OPTS"
+
 if [ -z "$(eval $GET_ID)" ] && [ -r "${PUB_ID_FILE:=$DEFAULT_PUB_ID_FILE}" ] ; then
   use_id_file "$PUB_ID_FILE"
 fi
+
 if [ -z "$(eval $GET_ID)" ] ; then
   printf '%s: ERROR: No identities found\n' "$0" >&2
   exit 1
 fi
+
 # populate_new_ids() uses several global variables ($USER_HOST, $SSH_OPTS ...)
 # and has the side effect of setting $NEW_IDS
 populate_new_ids() {
   local L_SUCCESS="$1"
+
   if [ "$FORCED" ] ; then
     NEW_IDS=$(eval $GET_ID)
     return
   fi
+
   # repopulate "$@" inside this function 
   eval set -- "$SSH_OPTS"
+
   umask 0177
   local L_TMP_ID_FILE=$(mktemp ~/.ssh/ssh-copy-id_id.XXXXXXXXXX)
   if test $? -ne 0 || test "x$L_TMP_ID_FILE" = "x" ; then
@@ -204,6 +227,7 @@ populate_new_ids() {
     eval $GET_ID | {
       while read ID || [ "$ID" ] ; do
         printf '%s\n' "$ID" > "$L_TMP_ID_FILE"
+
         # the next line assumes $PRIV_ID_FILE only set if using a single id file - this
         # assumption will break if we implement the possibility of multiple -i options.
         # The point being that if file based, ssh needs the private key, which it cannot
@@ -221,11 +245,13 @@ populate_new_ids() {
             cat >/dev/null #consume the other keys, causing loop to end
           }
         fi
+
         cat "$L_TMP_ID_FILE"
       done
     }
   )
   eval "$L_CLEANUP" && trap - EXIT TERM INT QUIT
+
   if expr "$NEW_IDS" : "^ERROR: " >/dev/null ; then
     printf '\n%s: %s\n\n' "$0" "$NEW_IDS" >&2
     exit 1
@@ -237,8 +263,10 @@ populate_new_ids() {
   fi
   printf '%s: INFO: %d key(s) remain to be installed -- if you are prompted now it is to install the new keys\n' "$0" "$(printf '%s\n' "$NEW_IDS" | wc -l)" >&2
 }
+
 REMOTE_VERSION=$(ssh -v -o PreferredAuthentications=',' -o ControlPath=none "$@" 2>&1 |
                  sed -ne 's/.*remote software version //p')
+
 case "$REMOTE_VERSION" in
   NetScreen*)
     populate_new_ids 1
@@ -269,18 +297,24 @@ case "$REMOTE_VERSION" in
     ADDED=$(printf '%s\n' "$NEW_IDS" | wc -l)
     ;;
 esac
+
 if [ "$DRY_RUN" ] ; then
   cat <<-EOF
         =-=-=-=-=-=-=-=
         Would have added the following key(s):
+
         $NEW_IDS
         =-=-=-=-=-=-=-=
         EOF
 else
   cat <<-EOF
+
         Number of key(s) added: $ADDED
+
         Now try logging into the machine, with:   "ssh $SSH_OPTS"
         and check to make sure that only the key(s) you wanted were added.
+
         EOF
 fi
+
 # =-=-=-=
